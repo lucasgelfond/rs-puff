@@ -1,4 +1,4 @@
-use puff_rs::{Client, DistanceMetric, Filter, QueryParams, RankBy, WriteParams};
+use rs_puff::{Client, DistanceMetric, Filter, QueryParams, RankBy, WriteParams};
 use std::collections::HashMap;
 
 #[tokio::main]

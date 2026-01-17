@@ -1,4 +1,4 @@
-# puff-rs
+# rs-puff
 
 A modern Rust client for [Turbopuffer](https://turbopuffer.com), the serverless vector database.
 
@@ -8,13 +8,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-puff-rs = "0.1"
+rs-puff = "0.1"
 ```
 
 ## Quick Start
 
 ```rust
-use puff_rs::{Client, DistanceMetric, Filter, QueryParams, RankBy, WriteParams};
+use rs_puff::{Client, DistanceMetric, Filter, QueryParams, RankBy, WriteParams};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -101,7 +101,7 @@ ns.hint_cache_warm().await?;
 Filters use a tuple-based format that matches the Turbopuffer API:
 
 ```rust
-use puff_rs::Filter;
+use rs_puff::Filter;
 
 // Comparison operators
 Filter::eq("name", "alice")           // ["name", "Eq", "alice"]
@@ -137,7 +137,7 @@ Filter::not(Filter::eq("deleted", true))
 ## Ranking
 
 ```rust
-use puff_rs::RankBy;
+use rs_puff::RankBy;
 
 // Vector similarity (ANN)
 RankBy::vector("vector", vec![0.1, 0.2, 0.3, 0.4])
@@ -163,7 +163,7 @@ RankBy::product(2.0, RankBy::bm25("title", "query"))
 ## Distance Metrics
 
 ```rust
-use puff_rs::DistanceMetric;
+use rs_puff::DistanceMetric;
 
 DistanceMetric::CosineDistance
 DistanceMetric::EuclideanSquared
@@ -172,7 +172,7 @@ DistanceMetric::EuclideanSquared
 ## Listing Namespaces
 
 ```rust
-use puff_rs::NamespacesParams;
+use rs_puff::NamespacesParams;
 
 let response = client.namespaces(NamespacesParams {
     prefix: Some("prod-".to_string()),

@@ -1,4 +1,4 @@
-use puff_rs::{
+use rs_puff::{
     Client, DistanceMetric, Filter, IncludeAttributes, NamespacesParams, QueryParams, RankBy,
     WriteParams,
 };

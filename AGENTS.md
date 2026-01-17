@@ -1,4 +1,4 @@
-# puff-rs Agent Guide
+# rs-puff Agent Guide
 
 Build a feature-complete, tested, rigorously typed Rust client for Turbopuffer that mirrors the official SDKs.
 

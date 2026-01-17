@@ -1,10 +1,10 @@
 [package]
-name = "puff-rs"
+name = "rs-puff"
 version = "0.1.0"
 edition = "2024"
 description = "A modern (unofficial) Rust client for Turbopuffer"
 license = "MIT"
-repository = "https://github.com/lucasgelfond/puff-rs"
+repository = "https://github.com/lucasgelfond/rs-puff"
 readme = "README.md"
 keywords = ["turbopuffer", "vector-database", "embeddings", "search", "async"]
 categories = ["api-bindings", "database"]
