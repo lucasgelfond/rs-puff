@@ -104,16 +104,40 @@ pub struct DeleteAllResponse {
 #[derive(Debug, Clone, Deserialize)]
 pub struct NamespaceMetadata {
     #[serde(default)]
-    pub approx_count: Option<u64>,
-
-    #[serde(default)]
-    pub dimensions: Option<u32>,
-
-    #[serde(default)]
     pub created_at: Option<String>,
 
     #[serde(default)]
-    pub unindexed_bytes: Option<u64>,
+    pub updated_at: Option<String>,
+
+    #[serde(default)]
+    pub approx_logical_bytes: Option<u64>,
+
+    #[serde(default)]
+    pub approx_row_count: Option<u64>,
+
+    #[serde(default)]
+    pub encryption: Option<NamespaceEncryption>,
+
+    #[serde(default)]
+    pub index: Option<NamespaceIndex>,
+
+    #[serde(default)]
+    pub schema: Option<HashMap<String, serde_json::Value>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NamespaceEncryption {
+    #[serde(default)]
+    pub sse: Option<bool>,
+
+    #[serde(default)]
+    pub cmek: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NamespaceIndex {
+    #[serde(default)]
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -224,13 +248,19 @@ mod tests {
     #[test]
     fn test_namespace_metadata() {
         let json = r#"{
-            "approx_count": 1000,
-            "dimensions": 384,
-            "created_at": "2024-01-15T12:00:00Z"
+            "created_at": "2024-01-15T12:00:00Z",
+            "updated_at": "2024-01-15T12:30:00Z",
+            "approx_logical_bytes": 1024,
+            "approx_row_count": 100,
+            "encryption": { "sse": true },
+            "index": { "status": "up-to-date" },
+            "schema": { "id": { "type": "uint" } }
         }"#;
         let resp: NamespaceMetadata = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.approx_count, Some(1000));
-        assert_eq!(resp.dimensions, Some(384));
+        assert_eq!(resp.created_at, Some("2024-01-15T12:00:00Z".to_string()));
+        assert_eq!(resp.approx_row_count, Some(100));
+        assert!(resp.encryption.is_some());
+        assert_eq!(resp.encryption.unwrap().sse, Some(true));
     }
 
     #[test]

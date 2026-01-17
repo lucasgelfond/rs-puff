@@ -1,7 +1,7 @@
 use reqwest::Method;
 
 use crate::{
-    Client, Result,
+    Client, Error, Result,
     params::{MultiQueryParams, QueryParams, WriteParams},
     responses::{
         DeleteAllResponse, HintCacheWarmResponse, MultiQueryResponse, NamespaceMetadata,
@@ -57,7 +57,7 @@ impl<'a> Namespace<'a> {
 
     pub async fn metadata(&self) -> Result<NamespaceMetadata> {
         self.client
-            .request_no_body(Method::GET, &self.v1_path(""))
+            .request_no_body(Method::GET, &self.v1_path("/metadata"))
             .await
     }
 
@@ -71,5 +71,17 @@ impl<'a> Namespace<'a> {
         self.client
             .request_no_body(Method::GET, &self.v1_path("/hint_cache_warm"))
             .await
+    }
+
+    /// Check if the namespace exists.
+    ///
+    /// Returns `true` if the namespace exists, `false` if it does not (404 error).
+    /// Other errors are propagated.
+    pub async fn exists(&self) -> Result<bool> {
+        match self.metadata().await {
+            Ok(_) => Ok(true),
+            Err(Error::Api { status: 404, .. }) => Ok(false),
+            Err(e) => Err(e),
+        }
     }
 }

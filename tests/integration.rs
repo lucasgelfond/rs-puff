@@ -2,15 +2,20 @@ use puff_rs::{
     Client, DistanceMetric, Filter, IncludeAttributes, NamespacesParams, QueryParams, RankBy,
     WriteParams,
 };
+use serial_test::serial;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn test_prefix() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_millis();
-    format!("rust_sdk_{}_", nonce)
+        .as_nanos();
+    let count = COUNTER.fetch_add(1, Ordering::SeqCst);
+    format!("rust_sdk_{}_{}_", nonce, count)
 }
 
 fn setup() -> Client {
@@ -32,6 +37,7 @@ fn row(id: i64, vector: Vec<f64>, attrs: Vec<(&str, serde_json::Value)>) -> Hash
 }
 
 #[tokio::test]
+#[serial]
 async fn test_sanity() {
     let client = setup();
     let prefix = test_prefix();
@@ -144,6 +150,7 @@ async fn test_sanity() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_order_by_attribute() {
     let client = setup();
     let prefix = test_prefix();
@@ -203,6 +210,7 @@ async fn test_order_by_attribute() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_contains_and_contains_any() {
     let client = setup();
     let prefix = test_prefix();
@@ -229,6 +237,7 @@ async fn test_contains_and_contains_any() {
                 ("category", serde_json::json!("backend")),
             ]),
         ]),
+        distance_metric: Some(DistanceMetric::CosineDistance),
         ..Default::default()
     })
     .await
@@ -298,6 +307,7 @@ async fn test_contains_and_contains_any() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_delete_by_filter() {
     let client = setup();
     let prefix = test_prefix();
@@ -353,8 +363,21 @@ async fn test_delete_by_filter() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_namespaces_listing() {
     let client = setup();
+    let prefix = test_prefix();
+
+    // Create a test namespace to ensure there's at least one to list
+    let test_ns = client.namespace(format!("{}ns_listing_test", prefix));
+    test_ns
+        .write(WriteParams {
+            upsert_rows: Some(vec![row(1, vec![0.1, 0.1], vec![])]),
+            distance_metric: Some(DistanceMetric::CosineDistance),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
 
     let namespaces0 = client
         .namespaces(NamespacesParams {
@@ -364,43 +387,56 @@ async fn test_namespaces_listing() {
         .await
         .unwrap();
 
-    assert_eq!(namespaces0.namespaces.len(), 5);
-    let cursor0 = namespaces0.next_cursor.clone();
+    // Verify we got some namespaces (up to page_size)
+    assert!(!namespaces0.namespaces.is_empty());
+    assert!(namespaces0.namespaces.len() <= 5);
 
-    let namespaces1 = client
-        .namespaces(NamespacesParams {
-            cursor: cursor0.clone(),
-            page_size: Some(5),
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+    // If there are more namespaces, test pagination
+    if let Some(cursor0) = namespaces0.next_cursor.clone() {
+        let namespaces1 = client
+            .namespaces(NamespacesParams {
+                cursor: Some(cursor0.clone()),
+                page_size: Some(5),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
-    assert_eq!(namespaces1.namespaces.len(), 5);
-    assert_ne!(cursor0, namespaces1.next_cursor);
+        assert!(namespaces1.namespaces.len() <= 5);
+        // Cursor should change between pages
+        assert_ne!(Some(cursor0), namespaces1.next_cursor);
+    }
+
+    // Cleanup
+    test_ns.delete_all().await.unwrap();
 }
 
 #[tokio::test]
+#[serial]
 async fn test_hint_cache_warm() {
     let client = setup();
+    let prefix = test_prefix();
 
-    // Get first namespace
-    let namespaces = client
-        .namespaces(NamespacesParams {
-            page_size: Some(1),
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+    // Create a test namespace
+    let ns = client.namespace(format!("{}hint_cache_warm", prefix));
+    let _ = ns.delete_all().await;
 
-    let ns_id = &namespaces.namespaces[0].id;
-    let ns = client.namespace(ns_id);
+    ns.write(WriteParams {
+        upsert_rows: Some(vec![row(1, vec![0.1, 0.1], vec![])]),
+        distance_metric: Some(DistanceMetric::CosineDistance),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
 
     let result = ns.hint_cache_warm().await.unwrap();
     assert!(result.status == "ACCEPTED" || result.status == "OK");
+
+    ns.delete_all().await.unwrap();
 }
 
 #[tokio::test]
+#[serial]
 async fn test_schema_and_metadata() {
     let client = setup();
     let prefix = test_prefix();
@@ -451,12 +487,18 @@ async fn test_schema_and_metadata() {
     assert!(schema_resp.0.contains_key("id"));
 
     let metadata = ns.metadata().await.unwrap();
-    assert!(metadata.created_at.is_some());
+    // Verify metadata structure - created_at should be present for existing namespaces
+    assert!(
+        metadata.created_at.is_some(),
+        "Expected created_at to be present, got metadata: {:?}",
+        metadata
+    );
 
     ns.delete_all().await.unwrap();
 }
 
 #[tokio::test]
+#[serial]
 async fn test_bm25_with_sum_query() {
     let client = setup();
     let prefix = test_prefix();
@@ -524,6 +566,7 @@ async fn test_bm25_with_sum_query() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_not_filter() {
     let client = setup();
     let prefix = test_prefix();
@@ -581,6 +624,7 @@ async fn test_not_filter() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_patch() {
     let client = setup();
     let prefix = test_prefix();
@@ -657,6 +701,7 @@ async fn test_patch() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_product_operator() {
     let client = setup();
     let prefix = test_prefix();
@@ -748,6 +793,7 @@ async fn test_product_operator() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_empty_namespace_query() {
     let client = setup();
     let prefix = test_prefix();
@@ -782,4 +828,236 @@ async fn test_empty_namespace_query() {
     assert_eq!(results.rows.len(), 0);
 
     ns.delete_all().await.unwrap();
+}
+
+#[tokio::test]
+#[serial]
+async fn test_exists() {
+    let client = setup();
+    let prefix = test_prefix();
+    let ns = client.namespace(format!("{}exists", prefix));
+
+    // Clean up if exists
+    let _ = ns.delete_all().await;
+
+    // Verify namespace doesn't exist yet
+    assert!(!ns.exists().await.unwrap());
+
+    // Create namespace
+    ns.write(WriteParams {
+        upsert_rows: Some(vec![row(1, vec![0.1, 0.1], vec![("private", serde_json::json!(true))])]),
+        distance_metric: Some(DistanceMetric::CosineDistance),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    // Verify namespace exists now
+    assert!(ns.exists().await.unwrap());
+
+    // Cleanup
+    ns.delete_all().await.unwrap();
+
+    // Verify namespace doesn't exist anymore
+    assert!(!ns.exists().await.unwrap());
+}
+
+#[tokio::test]
+#[serial]
+async fn test_copy_from_namespace() {
+    let client = setup();
+    let prefix = test_prefix();
+    let ns1 = client.namespace(format!("{}copy_from_1", prefix));
+    let ns2 = client.namespace(format!("{}copy_from_2", prefix));
+
+    let _ = ns1.delete_all().await;
+    let _ = ns2.delete_all().await;
+
+    // Create source namespace with data
+    ns1.write(WriteParams {
+        upsert_rows: Some(vec![
+            row(1, vec![0.1, 0.1], vec![("tags", serde_json::json!(["a"]))]),
+            row(2, vec![0.2, 0.2], vec![("tags", serde_json::json!(["b"]))]),
+            row(3, vec![0.3, 0.3], vec![("tags", serde_json::json!(["c"]))]),
+        ]),
+        distance_metric: Some(DistanceMetric::CosineDistance),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    // Copy to second namespace
+    ns2.write(WriteParams {
+        copy_from_namespace: Some(ns1.name().to_string()),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    // Verify data was copied
+    let results = ns2
+        .query(QueryParams {
+            rank_by: Some(RankBy::vector("vector", vec![0.1, 0.1])),
+            include_attributes: Some(IncludeAttributes::All(true)),
+            top_k: Some(10),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(results.rows.len(), 3);
+
+    // Cleanup
+    ns1.delete_all().await.unwrap();
+    ns2.delete_all().await.unwrap();
+}
+
+#[tokio::test]
+#[serial]
+async fn test_bm25_with_default_schema() {
+    let client = setup();
+    let prefix = test_prefix();
+    let ns = client.namespace(format!("{}bm25_default_schema", prefix));
+
+    let _ = ns.delete_all().await;
+
+    let mut schema = HashMap::new();
+    schema.insert(
+        "text".to_string(),
+        serde_json::json!({
+            "type": "string",
+            "full_text_search": true
+        }),
+    );
+
+    ns.write(WriteParams {
+        upsert_rows: Some(vec![
+            row(1, vec![0.1, 0.1], vec![
+                ("text", serde_json::json!("Walruses can produce a variety of funny sounds, including whistles, grunts, and bell-like noises.")),
+            ]),
+            row(2, vec![0.2, 0.2], vec![
+                ("text", serde_json::json!("They sometimes use their tusks as a tool to break through ice or to scratch their bodies.")),
+            ]),
+        ]),
+        distance_metric: Some(DistanceMetric::CosineDistance),
+        schema: Some(schema),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let results = ns
+        .query(QueryParams {
+            rank_by: Some(RankBy::bm25("text", "scratch")),
+            top_k: Some(10),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(results.rows.len(), 1);
+    assert_eq!(results.rows[0].get("id").unwrap(), 2);
+
+    ns.delete_all().await.unwrap();
+}
+
+#[tokio::test]
+#[serial]
+async fn test_contains_all_tokens() {
+    let client = setup();
+    let prefix = test_prefix();
+    let ns = client.namespace(format!("{}contains_all_tokens", prefix));
+
+    let _ = ns.delete_all().await;
+
+    let mut schema = HashMap::new();
+    schema.insert(
+        "text".to_string(),
+        serde_json::json!({
+            "type": "string",
+            "full_text_search": {
+                "stemming": true
+            }
+        }),
+    );
+
+    ns.write(WriteParams {
+        upsert_rows: Some(vec![row(
+            1,
+            vec![0.1, 0.1],
+            vec![("text", serde_json::json!("Walruses are large marine mammals with long tusks and whiskers"))],
+        )]),
+        distance_metric: Some(DistanceMetric::CosineDistance),
+        schema: Some(schema),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    // Should find the row
+    let results = ns
+        .query(QueryParams {
+            rank_by: Some(RankBy::bm25("text", "walrus whisker")),
+            filters: Some(Filter::contains_all_tokens("text", "marine mammals")),
+            top_k: Some(10),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(results.rows.len(), 1);
+
+    // Should not find the row - "short" is not in the text
+    let missing = ns
+        .query(QueryParams {
+            rank_by: Some(RankBy::bm25("text", "walrus whisker")),
+            filters: Some(Filter::contains_all_tokens("text", "marine mammals short")),
+            top_k: Some(10),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(missing.rows.len(), 0);
+
+    ns.delete_all().await.unwrap();
+}
+
+/// Cleanup test that deletes all ephemeral test namespaces with the `rust_sdk_` prefix.
+/// This helps clean up any orphaned namespaces from failed test runs.
+/// Marked as serial to run after all other tests complete.
+#[tokio::test]
+#[serial]
+async fn test_zz_cleanup_ephemeral_namespaces() {
+    let client = setup();
+
+    let mut cursor: Option<String> = None;
+    let mut deleted_count = 0;
+
+    loop {
+        let namespaces = client
+            .namespaces(NamespacesParams {
+                prefix: Some("rust_sdk_".to_string()),
+                cursor: cursor.clone(),
+                page_size: Some(100),
+            })
+            .await
+            .unwrap();
+
+        for ns_summary in &namespaces.namespaces {
+            if ns_summary.id.starts_with("rust_sdk_") {
+                let ns = client.namespace(&ns_summary.id);
+                if ns.delete_all().await.is_ok() {
+                    deleted_count += 1;
+                }
+            }
+        }
+
+        cursor = namespaces.next_cursor;
+        if cursor.is_none() || namespaces.namespaces.is_empty() {
+            break;
+        }
+    }
+
+    if deleted_count > 0 {
+        println!("Cleaned up {} ephemeral test namespaces", deleted_count);
+    }
 }

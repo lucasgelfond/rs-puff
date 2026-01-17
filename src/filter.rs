@@ -112,6 +112,26 @@ impl Filter {
     pub fn not(filter: Filter) -> Self {
         Filter::Not(Box::new(filter))
     }
+
+    pub fn contains_all_tokens(attr: impl Into<String>, value: impl Into<String>) -> Self {
+        Filter::ContainsAllTokens {
+            attr: attr.into(),
+            value: value.into(),
+            params: None,
+        }
+    }
+
+    pub fn contains_all_tokens_with_params(
+        attr: impl Into<String>,
+        value: impl Into<String>,
+        params: ContainsAllTokensParams,
+    ) -> Self {
+        Filter::ContainsAllTokens {
+            attr: attr.into(),
+            value: value.into(),
+            params: Some(params),
+        }
+    }
 }
 
 impl Serialize for Filter {

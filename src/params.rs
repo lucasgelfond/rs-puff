@@ -52,6 +52,9 @@ pub struct WriteParams {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub return_affected_ids: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copy_from_namespace: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
