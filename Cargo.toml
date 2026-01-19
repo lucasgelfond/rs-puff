@@ -1,6 +1,6 @@
 [package]
 name = "rs-puff"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "A modern (unofficial) Rust client for Turbopuffer"
 license = "MIT"
@@ -10,10 +10,15 @@ keywords = ["turbopuffer", "vector-database", "embeddings", "search", "async"]
 categories = ["api-bindings", "database"]
 authors = ["Lucas Gelfond"]
 
+[features]
+default = ["native-tls"]
+native-tls = ["reqwest/default-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "http2"] }
 thiserror = "1.0"
 
 [dev-dependencies]
