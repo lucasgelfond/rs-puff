@@ -8,6 +8,9 @@ This is a bit of an experiment in agent-based coding. I have a little Rust-based
 
 For dev setup, I had Claude write an AGENTS.md that specified where the docs are, and I manually cloned all of the other clients to `other-clients/`, which I .gitignore-d. Then I just had Claude Opus 4.5 rip it with those instructions. 
 
+I had Claude also copy over existing integration tests; only required a few revs to get everything working well. My guess is this will work for most cases, but YMMV / this software comes with no guarantees, etc (particularly because it's all generated!)
+
+
 ## Installation
 
 Add to your `Cargo.toml`:
